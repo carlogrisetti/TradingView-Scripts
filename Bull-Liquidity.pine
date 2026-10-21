@@ -1,41 +1,30 @@
 //@version=6
 indicator("Liquidity Sentiment", overlay=false)
 
-// 1. Configurable Parameters
-length_ind = input.int(8, title="Indicator number of SMA intervals")
+// 1. Parameters
+length_ind = input.int(8,  title="Indicator number of SMA intervals")
 length_ma  = input.int(20, title="Moving average number of SMA intervals")
 
-// 2. Base Calculation: Ratio of the Averages
-// By calculating the SMA of volume and the SMA of the range separately before dividing,
-// we prevent narrow-range candles from causing extreme division-by-zero spikes.
-// This creates the smooth curve seen in the original indicator.
-vol_sma = ta.sma(volume, length_ind)
-rng_sma = ta.sma(high - low, length_ind)
+// 2. Volume and range from the regular-session series of the same symbol.
+//    In RTH this equals the chart data; in ETH/24H the last regular-session bar's
+//    values are held across extended-hours bars.
+rthTicker = ticker.modify(syminfo.tickerid, session.regular)
+[rth_vol, rth_rng] = request.security(rthTicker, timeframe.period, [volume, high - low])
 
+// 3. SMAs on every chart bar
+vol_sma  = ta.sma(rth_vol, length_ind)
+rng_sma  = ta.sma(rth_rng, length_ind)
 safe_rng = rng_sma > 0 ? rng_sma : syminfo.mintick
 
-// The fast sentiment line is the ratio of these two smoothed averages
 liq_sentiment = -(vol_sma / safe_rng)
+signal_line   = ta.sma(liq_sentiment, length_ma)
 
-// 3. Signal Line Construction
-// The signal line applies the slow moving average to the fast sentiment line
-signal_line = ta.sma(liq_sentiment, length_ma)
-
-// 4. Color & State Logic
-// Fast line below slow line = High/Expanding Liquidity (Green)
-// Fast line above slow line = Low/Contracting Liquidity (Red)
+// 4. State: fast below slow = expanding liquidity (green), above = contracting (red)
 is_expanding = liq_sentiment < signal_line
+state_color  = is_expanding ? color.new(#00e676, 0)  : color.new(#ff5252, 0)
+fill_color   = is_expanding ? color.new(#00e676, 75) : color.new(#ff5252, 75)
 
-// Both lines dynamically switch colors to match the active zone state
-state_color = is_expanding ? color.new(#00e676, 0) : color.new(#ff5252, 0)
-fill_color  = is_expanding ? color.new(#00e676, 75) : color.new(#ff5252, 75)
-
-// 5. Visual Rendering
-// Fast Line (SMA 8): Width 1
-plot_ind = plot(liq_sentiment, color=state_color, title="Sentiment Line", linewidth=1)
-
-// Slow Line (SMA 20): Width 2
-plot_sig = plot(signal_line, color=state_color, title="Signal Line", linewidth=2)
-
-// Fill between SMA 8 and SMA 20
-fill(plot_ind, plot_sig, color=fill_color, title="Sentiment Fill")
+// 5. Rendering
+plot_ind = plot(liq_sentiment, "Sentiment Line", state_color, 1)
+plot_sig = plot(signal_line,   "Signal Line",    state_color, 2)
+fill(plot_ind, plot_sig, fill_color, "Sentiment Fill")
