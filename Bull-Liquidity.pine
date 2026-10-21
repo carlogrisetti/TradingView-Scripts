@@ -5,9 +5,7 @@ indicator("Liquidity Sentiment", overlay=false)
 length_ind = input.int(8,  title="Indicator number of SMA intervals")
 length_ma  = input.int(20, title="Moving average number of SMA intervals")
 
-// 2. Volume and range from the regular-session series of the same symbol.
-//    In RTH this equals the chart data; in ETH/24H the last regular-session bar's
-//    values are held across extended-hours bars.
+// 2. Volume and range from the regular-session series of the same symbol
 rthTicker = ticker.modify(syminfo.tickerid, session.regular)
 [rth_vol, rth_rng] = request.security(rthTicker, timeframe.period, [volume, high - low])
 
